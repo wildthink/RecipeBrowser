@@ -20,8 +20,6 @@ final class RecipeBrowserTests: XCTestCase {
 
     func testModelSerialization() throws {
         XCTAssertNoThrow(try JSONDecoder().decode(RecipeBox.self, from: json))
-//        let catalog = try JSONDecoder().decode(RecipeBox.self, from: json)
-//        print(catalog)
     }
 
     func testPerformanceExample() throws {

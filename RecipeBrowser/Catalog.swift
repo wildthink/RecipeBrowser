@@ -45,7 +45,7 @@ struct RecipeBox: Decodable {
 struct Recipe: Codable, Identifiable, Sendable {
     var id: UUID { uuid }
     let cuisine, name: String
-    let photoURLLarge, photoURLSmall: URL
+    let photoURLLarge, photoURLSmall: URL?
     let sourceURL: URL?
     let uuid: UUID
     let youtubeURL: URL?

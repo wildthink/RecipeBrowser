@@ -12,15 +12,18 @@ struct ContentView: View {
     @State var recipeBox: RecipeBox = .init()
     @State var selectedRecipe: Recipe?
     @State var emptyMessage: String = "No recipes were found"
-    
+    @State var selectedResourceId: ObjectIdentifier
+
     init() {
         resource = .allRecipes
+        selectedResourceId = ResourceBox<RecipeBox>.allRecipes.id
     }
     
     var body: some View {
         VStack {
             Group {
                 if recipeBox.isEmpty {
+                    Spacer()
                     ContentUnavailableView(
                         "No Recipes",
                         systemImage: "fork.knife.circle",
@@ -30,6 +33,7 @@ struct ContentView: View {
                     recipeList
                 }
             }
+            Spacer()
             controls
                 .frame(maxWidth: .infinity)
                 .cardStyle(cornerRadius: 4, shadowRadius: 0)
@@ -56,7 +60,7 @@ struct ContentView: View {
                 LazyVStack {
                     ForEach(recipeBox.select(for: cuisine)) { recipe in
                         RecipeView(recipe: recipe, presentationStyle: .row)
-                            .frame(maxWidth: .infinity, maxHeight: 120, alignment: .leading)
+                            .frame(maxWidth: .infinity, maxHeight: 80, alignment: .leading)
                             .cardStyle()
                             .contentShape(.rect)
                             .onTapGesture {
@@ -64,7 +68,6 @@ struct ContentView: View {
                             }
                     }
                 }
-                .padding()
             }
         }
         .overlay {
@@ -84,31 +87,39 @@ extension ContentView {
     var controls: some View {
         HStack {
             Button("Clear Cache", systemImage: "trash") {
-                ImageCache.shared.clearCache()
+                ResourceCache.shared.clearCache()
             }
             Button("Refresh", systemImage: "square.and.arrow.down") {
                 Task { await refresh() }
             }
+            Picker("Endpoint", selection: $selectedResourceId) {
+                Text("All Recipes").tag(ResourceBox.allRecipes.id)
+                Text("Empty Recipes").tag(ResourceBox.emptyRecipes.id)
+                Text("Malformed Recipes").tag(ResourceBox.malformedRecipes.id)
+            }
+        }
+        .padding()
+        .onChange(of: selectedResourceId) {
+            Task { await refresh() }
         }
     }
     
     func refresh() async {
+        emptyMessage = "No recipes were found"
+        
+        let it = ResourceBox<RecipeBox>
+            .allCases.first { $0.id == selectedResourceId }
+        ?? .allRecipes
+        resource = it
+
         do {
             if let box = try await resource.awaitValue() {
                 recipeBox = box
             }
         } catch {
-            print(error)
+            emptyMessage = error.localizedDescription
+            resource = .emptyRecipes
         }
-    }
-}
-
-struct ImageCache {
-    static let shared = ImageCache()
-    
-    let cacheDirectory = URL(filePath: "/Users/jason/Downloads/cache")
-    func clearCache() {
-        try? FileManager.default.removeItem(at: cacheDirectory)
     }
 }
 
@@ -122,36 +133,31 @@ struct ImageCache {
  */
 
 extension ResourceBox<RecipeBox> {
-    static let allRecipes = ResourceBox(
-        remote: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes.json",
-        cache: "/Users/jason/Downloads/cache/recipes.data",
-        decode: {
-            try JSONDecoder().decode(RecipeBox.self, from: $0)
-        })!
+    static var allCases: [ResourceBox<RecipeBox>] = [
+        .allRecipes, .emptyRecipes, .malformedRecipes
+    ]
     
-    static let emptyRecipes = ResourceBox(
-        remote: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-empty.json",
-        cache: "/Users/jason/Downloads/cache/recipes-empty.data",
-        decode: {
-            try JSONDecoder().decode(RecipeBox.self, from: $0)
-        })!
+    static let allRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+        .resource(
+            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes.json")!,
+            key: "recipes.json")
+    
+    static let emptyRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+        .resource(
+            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-empty.json")!,
+            key: "recipes-empty.json")
 
-    static let malformedRecipes = ResourceBox(
-        remote: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-malformed.json",
-        cache: "/Users/jason/Downloads/cache/recipes-malformed.data",
-        decode: {
-            try JSONDecoder().decode(RecipeBox.self, from: $0)
-        })!
+    static let malformedRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+        .resource(
+            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-malformed.json")!,
+            key: "recipes-malformed.json")
 
 }
 
 extension ResourceBox<Image> {
-    static func imageResource(for url: URL) -> ResourceBox {
+    static func imageResource(for url: URL) -> ResourceBox<Image> {
         let key = url.path.replacingOccurrences(of: "/", with: "_")
-        return ResourceBox(
-            remote: url,
-            cache: "/Users/jason/Downloads/cache/\(key).jpg",
-            decode: Image.init)
+        return ResourceCache.shared.resource(remote: url, key: key)
     }
 }
 
@@ -182,4 +188,3 @@ extension Image {
 #Preview {
     ContentView()
 }
-

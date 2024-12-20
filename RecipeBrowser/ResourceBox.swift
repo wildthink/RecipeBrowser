@@ -28,6 +28,14 @@ final public class ResourceBox<Value>: Observable, @unchecked Sendable {
         self.decode = decode
     }
     
+    public init(remote: URL, cache: URL,
+          decode: @escaping @Sendable (Data) throws -> Value
+    ) {
+        self.remoteURL = remote
+        self.fileURL = cache
+        self.decode = decode
+    }
+
     public init(remote: URL, cache: String,
           decode: @escaping @Sendable (Data) throws -> Value
     ) {
@@ -84,10 +92,6 @@ final public class ResourceBox<Value>: Observable, @unchecked Sendable {
         lock.withLock {
             value = newValue
         }
-
-//        try withLock { val in
-//            val = try decode(data)
-//        }
     }
     
     public var isCached: Bool {
