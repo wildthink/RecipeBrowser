@@ -14,6 +14,7 @@ enum PresentationStyle {
 
 
 struct RecipeView: View {
+    @Environment(\.openURL) var openURL
     @State var resource: ResourceBox<Image>?
     @State var image: Image?
     var recipe: Recipe
@@ -39,6 +40,13 @@ struct RecipeView: View {
                 rowView
             }
         }
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .bottomTrailing) {
+            links
+                .frame(maxWidth: .infinity)
+                .padding(.trailing, 4)
+                .padding(.bottom, 4)
+        }
         .onAppear {
             image = resource?.load(refresh: false)
         }
@@ -51,11 +59,30 @@ struct RecipeView: View {
     }
     
     @ViewBuilder
+    var links: some View {
+        HStack {
+            Spacer()
+            if let sourceURL = recipe.sourceURL {
+                Image(systemName: "link")
+                    .onTapGesture {
+                        openURL(sourceURL)
+                    }
+            }
+            if let youtubeURL = recipe.youtubeURL {
+                Image(systemName: "tv")
+                    .onTapGesture {
+                        openURL(youtubeURL)
+                    }
+            }
+        }
+    }
+    @ViewBuilder
     var rowView: some View {
         HStack {
             photo
                 .cornerRadius(8)
             caption
+            Spacer()
         }
     }
     
