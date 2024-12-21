@@ -8,9 +8,16 @@
 import Foundation
 import Observation
 
-final public class ResourceBox<Value>: Observable, @unchecked Sendable {
+public protocol AnyResourceBox: Identifiable {
+    var id: ObjectIdentifier { get }
+    var valueType: Any.Type  { get }
+}
+
+final public class ResourceBox<Value>: Observable, AnyResourceBox, @unchecked Sendable {
     public var id: ObjectIdentifier { ObjectIdentifier(self) }
+    public var valueType: Any.Type { Value.self }
     public private(set) var isLoading: Bool = false
+    
     private let lock = NSRecursiveLock()
     private var value: Value?
 

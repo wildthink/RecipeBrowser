@@ -23,7 +23,7 @@ struct RecipeView: View {
     init(recipe: Recipe, presentationStyle: PresentationStyle) {
         if let imgURL = (presentationStyle == .fullpage)
             ? recipe.photoURLLarge : recipe.photoURLSmall {
-            self.resource = .imageResource(for: imgURL)
+            self.resource = try? .imageResource(for: imgURL)
         }
         self.recipe = recipe
         self.presentationStyle = presentationStyle

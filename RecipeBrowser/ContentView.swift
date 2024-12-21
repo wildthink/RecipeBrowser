@@ -137,17 +137,17 @@ extension ResourceBox<RecipeBox> {
         .allRecipes, .emptyRecipes, .malformedRecipes
     ]
     
-    static let allRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+    static let allRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
         .resource(
             remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes.json")!,
             key: "recipes.json")
     
-    static let emptyRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+    static let emptyRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
         .resource(
             remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-empty.json")!,
             key: "recipes-empty.json")
 
-    static let malformedRecipes: ResourceBox<RecipeBox> = ResourceCache.shared
+    static let malformedRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
         .resource(
             remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-malformed.json")!,
             key: "recipes-malformed.json")
@@ -155,9 +155,9 @@ extension ResourceBox<RecipeBox> {
 }
 
 extension ResourceBox<Image> {
-    static func imageResource(for url: URL) -> ResourceBox<Image> {
+    static func imageResource(for url: URL) throws -> ResourceBox<Image> {
         let key = url.path.replacingOccurrences(of: "/", with: "_")
-        return ResourceCache.shared.resource(remote: url, key: key)
+        return try ResourceCache.shared.resource(remote: url, key: key)
     }
 }
 
