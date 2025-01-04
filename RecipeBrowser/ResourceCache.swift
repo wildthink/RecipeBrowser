@@ -75,7 +75,7 @@ extension ResourceCache {
 }
 
 extension String {
-    func DJB2hashValue(seed: Int) -> Int {
+    func DJB2hashValue(seed: Int = 5381) -> Int {
         return unicodeScalars.reduce(seed) { ($0 &* 33) &+ Int($1.value) }
     }
 }

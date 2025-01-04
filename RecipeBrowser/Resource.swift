@@ -8,13 +8,17 @@
 import Foundation
 import SwiftUI
 
+public protocol DataDecodable {
+    @Sendable init(data: Data) throws
+}
+
 @MainActor
 @propertyWrapper
-struct Resource<Value>: @preconcurrency DynamicProperty
+struct Resource<Value: DataDecodable>: @preconcurrency DynamicProperty
 {
-    typealias Qual = String // Qualifier<Value>
-    @StateObject private var tracker: Tracker = .init()
-    var qualifier: Qual? {
+    typealias Qualifier = String
+    @StateObject private var tracker: Tracker<Value> = .init()
+    var qualifier: Qualifier? {
         get { tracker.qualifier }
         nonmutating set { tracker.qualifier = newValue }
     }
@@ -30,18 +34,57 @@ struct Resource<Value>: @preconcurrency DynamicProperty
     }
     
     mutating func update() {
-        print(#function, self.qualifier ?? "")
         tracker.qualifier = self.qualifier
     }
     
-    public var projectedValue: Self {
-        get {
-            print(#function)
-            return self
-        }
+    public var projectedValue: Tracker<Value> {
+        tracker
     }
 }
 
+extension ResourceCache {
+    
+    func resource<D: DataDecodable>(
+        _ type: D.Type = D.self,
+        remote: URL
+    ) throws -> ResourceBox<D> {
+        let key = remote.absoluteString.DJB2hashValue().description
+        return try resource(remote: remote, key: key, decode: D.init)
+    }
+}
+
+extension Image: DataDecodable {}
+extension Optional: DataDecodable where Wrapped: DataDecodable {
+    public init(data: Data) throws {
+        self = try Wrapped(data: data)
+    }
+}
+
+extension Image: @retroactive Decodable {
+    public init(from decoder: Decoder) throws {
+        // Provide a meaningful implementation or throw an error if decoding is unsupported
+        throw DecodingError.typeMismatch(
+            Image.self,
+            DecodingError.Context(
+                codingPath: decoder.codingPath,
+                debugDescription: "Image cannot be directly decoded."
+            )
+        )
+    }
+}
+
+public struct AnyDecoable<Value: Decodable>: DataDecodable {
+    var valueType: Any.Type { Value.self }
+    var value: Value
+    
+    public init(data: Data) throws {
+        value = try JSONDecoder().decode(Value.self, from: data)
+    }    
+}
+
+//extension Decodable: DataDecodable {
+//    
+//}
 //extension Resource {
 //    init(wrappedValue url: URL?) {
 //        fatalError()
@@ -49,52 +92,63 @@ struct Resource<Value>: @preconcurrency DynamicProperty
 //    }
 //}
 
-import Combine
+//import Combine
 
 extension Resource {
     
-    /// The object that keeps on observing the database as long as it is alive.
+    final class Tracker<TValue: DataDecodable>: ObservableObject, @unchecked Sendable {
+        var resource: ResourceBox<TValue>?
 
-    private final class Tracker: ObservableObject, @unchecked Sendable {
-        var resource: ResourceBox<Data>?
-        var defaultValue: Value?
-
-        private var subscription: Cancellable?
-//        private var database = NXApp.database
-        var qualifier: Qual? {
-            didSet { load() }
+        var qualifier: Qualifier? {
+            get { _qualifier }
+            set {
+                guard newValue != _qualifier
+                else { return }
+                _qualifier = newValue
+                reload()
+            }
         }
+        
+        var _qualifier: Qualifier?
 
-        public var value: Value? {
+        public var value: TValue? {
             if let _cache { return _cache }
             load()
             return _cache
          }
-        private var _cache: Value?
+        private var _cache: TValue?
         
-        init(qualifier: Qual? = nil) {
-            let base = URL(string: "https://example.com/")!
-            if let qualifier, let url = URL(string: qualifier, relativeTo: base) {
-                let key = url.path.replacingOccurrences(of: "/", with: "_")
-                self.resource = try? ResourceCache.shared.resource(remote: url, key: key)
+        init(qualifier: Qualifier? = nil) {
+            if let qualifier, let url = URL(string: qualifier) {
+                resource = try? ResourceCache.shared.resource(TValue.self, remote: url)
+            }
+        }
+                
+        func resetCache(to value: TValue) {
+            Task { @MainActor in
+                objectWillChange.send()
+                _cache = value
             }
         }
         
-        deinit {
-            subscription?.cancel()
+        func reload() {
+            if let qualifier, qualifier != resource?.remoteURL.absoluteString,
+               let url = URL(string: qualifier) {
+                resource = try? ResourceCache.shared.resource(TValue.self, remote: url)
+            }
+            load()
         }
         
         func load() {
-            print(#function, resource?.remoteURL)
-//            _cache = resource?.load(refresh: false)
+            guard let resource else { return }
+            if let val = resource.load(refresh: false) {
+                resetCache(to: val)
+            }
             Task {
-//                guard let qualifier else { return }
-                if let val = try? await resource?.awaitValue() {
-                    print("did", #function, val)
-//                    _cache = val
+                if let val = try? await resource.awaitValue() {
+                    resetCache(to: val)
                 }
             }
         }
     }
 }
-

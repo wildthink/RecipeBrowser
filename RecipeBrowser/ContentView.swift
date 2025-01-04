@@ -162,7 +162,7 @@ extension ResourceBox<Image> {
 }
 
 #if os(macOS)
-extension Image {
+public extension Image {
     @Sendable init(data: Data) {
         self = if let it = NSImage(data: data) {
             Self.init(nsImage: it)
@@ -174,7 +174,7 @@ extension Image {
 #endif
 
 #if os(iOS)
-extension Image {
+public extension Image {
     @Sendable init(data: Data) {
         self = if let it = UIImage(data: data) {
             Self.init(uiImage: it)
