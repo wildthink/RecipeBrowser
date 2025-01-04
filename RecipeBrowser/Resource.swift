@@ -8,13 +8,14 @@
 import Foundation
 import SwiftUI
 
+
 @MainActor
 @propertyWrapper
 struct Resource<Value>: @preconcurrency DynamicProperty
 {
-    typealias Qual = String // Qualifier<Value>
-    @StateObject private var tracker: Tracker = .init()
-    var qualifier: Qual? {
+    typealias Qualifier = CacheKey<Value>
+    @StateObject private var tracker: Tracker<Value> = .init()
+    var qualifier: Qualifier? {
         get { tracker.qualifier }
         nonmutating set { tracker.qualifier = newValue }
     }
@@ -30,71 +31,70 @@ struct Resource<Value>: @preconcurrency DynamicProperty
     }
     
     mutating func update() {
-        print(#function, self.qualifier ?? "")
         tracker.qualifier = self.qualifier
     }
     
-    public var projectedValue: Self {
-        get {
-            print(#function)
-            return self
-        }
+    public var projectedValue: Tracker<Value> {
+        tracker
     }
 }
 
-//extension Resource {
-//    init(wrappedValue url: URL?) {
-//        fatalError()
-////        self._wrappedValue = .blankValue
-//    }
-//}
-
-import Combine
 
 extension Resource {
     
-    /// The object that keeps on observing the database as long as it is alive.
+    final class Tracker<BoxValue>: ObservableObject, @unchecked Sendable {
+        var resource: ResourceBox<BoxValue>?
 
-    private final class Tracker: ObservableObject, @unchecked Sendable {
-        var resource: ResourceBox<Data>?
-        var defaultValue: Value?
-
-        private var subscription: Cancellable?
-//        private var database = NXApp.database
-        var qualifier: Qual? {
-            didSet { load() }
+        var qualifier: CacheKey<BoxValue>? {
+            get { _qualifier }
+            set {
+                guard newValue != _qualifier
+                else { return }
+                _qualifier = newValue
+                reload()
+            }
         }
+        
+        var _qualifier: CacheKey<BoxValue>?
 
-        public var value: Value? {
+        public var value: BoxValue? {
             if let _cache { return _cache }
             load()
             return _cache
          }
-        private var _cache: Value?
+        private var _cache: BoxValue?
         
-        init(qualifier: Qual? = nil) {
-            let base = URL(string: "https://example.com/")!
-            if let qualifier, let url = URL(string: qualifier, relativeTo: base) {
-                let key = url.path.replacingOccurrences(of: "/", with: "_")
-                self.resource = try? ResourceCache.shared.resource(remote: url, key: key)
+        init(cacheKey: CacheKey<BoxValue>? = nil) {
+            if let cacheKey {
+                self.qualifier = cacheKey
+                resource = try? ResourceCache.shared.resource(key: cacheKey)
+            }
+        }
+                
+        func resetCache(to value: BoxValue) {
+            Task { @MainActor in
+                objectWillChange.send()
+                _cache = value
             }
         }
         
-        deinit {
-            subscription?.cancel()
+        func reload() {
+            if let qualifier {
+                resource = try? ResourceCache.shared.resource(key: qualifier)
+            }
+            load()
         }
         
         func load() {
-            print(#function, resource?.remoteURL)
-//            _cache = resource?.load(refresh: false)
+            guard let resource else { return }
+            if let val = resource.load(refresh: false) {
+                resetCache(to: val)
+            }
             Task {
-//                guard let qualifier else { return }
-                if let val = try? await resource?.awaitValue() {
-                    print("did", #function, val)
-//                    _cache = val
+                if let val = try? await resource.awaitValue() {
+                    resetCache(to: val)
                 }
             }
         }
     }
 }
-

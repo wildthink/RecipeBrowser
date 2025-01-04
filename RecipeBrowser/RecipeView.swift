@@ -15,18 +15,20 @@ enum PresentationStyle {
 
 struct RecipeView: View {
     @Environment(\.openURL) var openURL
-    @State var resource: ResourceBox<Image>?
-    @State var image: Image?
+    @Resource var image: Image?
     var recipe: Recipe
     var presentationStyle: PresentationStyle
     
     init(recipe: Recipe, presentationStyle: PresentationStyle) {
-        if let imgURL = (presentationStyle == .fullpage)
-            ? recipe.photoURLLarge : recipe.photoURLSmall {
-            self.resource = try? .imageResource(for: imgURL)
-        }
         self.recipe = recipe
         self.presentationStyle = presentationStyle
+    }
+    
+    func refreshImage() {
+        if let imgURL = (presentationStyle == .fullpage)
+            ? recipe.photoURLLarge : recipe.photoURLSmall {
+            $image.qualifier = CacheKey(url: imgURL, decoder: Image.init)
+        }
     }
     
     var body: some View {
@@ -48,13 +50,7 @@ struct RecipeView: View {
                 .padding(.bottom, 4)
         }
         .onAppear {
-            image = resource?.load(refresh: false)
-        }
-        .task {
-            guard image == nil else { return }
-            if let img = try? await resource?.awaitValue() {
-                image = img
-            }
+            refreshImage()
         }
     }
     

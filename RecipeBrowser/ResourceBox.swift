@@ -13,7 +13,7 @@ public protocol AnyResourceBox: Identifiable {
     var valueType: Any.Type  { get }
 }
 
-final public class ResourceBox<Value>: Observable, AnyResourceBox, @unchecked Sendable {
+final public class ResourceBox<Value>: ObservableObject, AnyResourceBox, @unchecked Sendable {
     public var id: ObjectIdentifier { ObjectIdentifier(self) }
     public var valueType: Any.Type { Value.self }
     public private(set) var isLoading: Bool = false
