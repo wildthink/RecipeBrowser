@@ -66,7 +66,7 @@ final public class ResourceBox<Value>: ObservableObject, AnyResourceBox, @unchec
     }
     
     func report(_ error: Error) {
-        print(error)
+        print(#function, error)
     }
     
     // cache to disk
@@ -117,6 +117,7 @@ final public class ResourceBox<Value>: ObservableObject, AnyResourceBox, @unchec
             } catch {
                 // Something is wrong w/ the cached file
                 // so let's remove it
+                report(error)
                 try? FileManager.default.removeItem(at: fileURL)
             }
         }
@@ -148,6 +149,7 @@ final public class ResourceBox<Value>: ObservableObject, AnyResourceBox, @unchec
 
 struct AnyError: Error {
     let msg: String
+    let date = Date()
     let file: String
     let line: UInt
     init(_ msg: String = "Some Error", file: String = #fileID, line: UInt = #line) {

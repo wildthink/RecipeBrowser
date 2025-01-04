@@ -67,10 +67,15 @@ extension Resource {
         init(cacheKey: CacheKey<BoxValue>? = nil) {
             if let cacheKey {
                 self.qualifier = cacheKey
+                // TODO: report exceptions
                 resource = try? ResourceCache.shared.resource(key: cacheKey)
             }
         }
-                
+        
+        func report(error: Error) {
+            print("Error loading resource: \(error.localizedDescription)")
+        }
+        
         func resetCache(to value: BoxValue) {
             Task { @MainActor in
                 objectWillChange.send()
@@ -80,7 +85,11 @@ extension Resource {
         
         func reload() {
             if let qualifier {
-                resource = try? ResourceCache.shared.resource(key: qualifier)
+                do {
+                    resource = try ResourceCache.shared.resource(key: qualifier)
+                } catch {
+                    report(error: error)
+                }
             }
             load()
         }
@@ -91,8 +100,12 @@ extension Resource {
                 resetCache(to: val)
             }
             Task {
-                if let val = try? await resource.awaitValue() {
-                    resetCache(to: val)
+                do {
+                    if let val = try await resource.awaitValue() {
+                        resetCache(to: val)
+                    }
+                } catch {
+                    report(error: error)
                 }
             }
         }

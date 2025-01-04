@@ -61,16 +61,16 @@ final class ResourceCache {
 }
 
 public struct CacheKey<Value>: Hashable {
-    let url: URL
-    var valueType: Any.Type { Value.self }
+    public let url: URL
+    public var valueType: Any.Type { Value.self }
     let decoder: @Sendable (Data) throws -> Value
     
-    init(url: URL, decoder: @escaping @Sendable (Data) -> Value) {
+    public init(url: URL, decoder: @escaping @Sendable (Data) -> Value) {
         self.url = url
         self.decoder = decoder
     }
 
-    var localKey: String { url.DJB2hashValue().description }
+    public var localKey: String { url.DJB2hashValue().description }
     
     public func hash(into hasher: inout Hasher) {
         hasher.combine(url)
@@ -81,7 +81,7 @@ public struct CacheKey<Value>: Hashable {
     }
 }
 
-extension CacheKey {
+public extension CacheKey {
     
     init(for: Value.Type = Value.self, url: URL)
     where Value: Decodable {
@@ -110,11 +110,11 @@ extension ResourceCache {
             decode: key.decoder)
     }
 
-    func resource<R: Decodable>(remote: URL, key: String) throws -> ResourceBox<R> {
-        try resource(remote: remote, key: key, decode: {
-            try JSONDecoder().decode(R.self, from: $0)
-        })
-    }
+//    func resource<R: Decodable>(remote: URL, key: String) throws -> ResourceBox<R> {
+//        try resource(remote: remote, key: key, decode: {
+//            try JSONDecoder().decode(R.self, from: $0)
+//        })
+//    }
 }
 
 extension CustomStringConvertible {
