@@ -60,17 +60,66 @@ final class ResourceCache {
     }
 }
 
+public struct CacheKey<Value>: Hashable {
+    let url: URL
+    var valueType: Any.Type { Value.self }
+    let decoder: @Sendable (Data) throws -> Value
+    
+    init(url: URL, decoder: @escaping @Sendable (Data) -> Value) {
+        self.url = url
+        self.decoder = decoder
+    }
+
+    var localKey: String { url.DJB2hashValue().description }
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(url)
+    }
+    
+    static public func == (lhs: CacheKey<Value>, rhs: CacheKey<Value>) -> Bool {
+        lhs.url == rhs.url
+    }
+}
+
+extension CacheKey {
+    
+    init(for: Value.Type = Value.self, url: URL)
+    where Value: Decodable {
+        self.url = url
+        self.decoder = {
+            try JSONDecoder().decode(Value.self, from: $0)
+        }
+    }
+    
+    init(for: Value.Type = Value.self, url: URL)
+    where Value == Image {
+        self.url = url
+        self.decoder = { Image(data: $0) }
+    }
+
+}
+
 // MARK: Convenience ResourceBoxes
 
 extension ResourceCache {
+    
+    func resource<R>(key: CacheKey<R>) throws -> ResourceBox<R> {
+        try resource(
+            remote: key.url,
+            key: key.localKey,
+            decode: key.decoder)
+    }
+
     func resource<R: Decodable>(remote: URL, key: String) throws -> ResourceBox<R> {
         try resource(remote: remote, key: key, decode: {
             try JSONDecoder().decode(R.self, from: $0)
         })
     }
+}
 
-    func resource(remote: URL, key: String) throws -> ResourceBox<Image> {
-        try resource(remote: remote, key: key, decode: Image.init)
+extension CustomStringConvertible {
+    func DJB2hashValue(seed: Int = 5381) -> Int {
+        description.DJB2hashValue(seed: seed)
     }
 }
 

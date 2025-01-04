@@ -16,7 +16,7 @@ public protocol DataDecodable {
 @propertyWrapper
 struct Resource<Value: DataDecodable>: @preconcurrency DynamicProperty
 {
-    typealias Qualifier = String
+    typealias Qualifier = CacheKey<Value>
     @StateObject private var tracker: Tracker<Value> = .init()
     var qualifier: Qualifier? {
         get { tracker.qualifier }
@@ -42,7 +42,17 @@ struct Resource<Value: DataDecodable>: @preconcurrency DynamicProperty
     }
 }
 
+// MARK: Cache Extension
+
 extension ResourceCache {
+    
+//    func resource<Value, Key: CacheKey>(
+//        _ key: Key
+//    ) where Key.Type == Value throws -> ResourceBox<Value> {
+//        let key = key.url.absoluteString.DJB2hashValue().description
+//        return try resource(remote: remote, key: key, decode: D.init)
+//    }
+
     
     func resource<D: DataDecodable>(
         _ type: D.Type = D.self,
@@ -73,33 +83,12 @@ extension Image: @retroactive Decodable {
     }
 }
 
-public struct AnyDecoable<Value: Decodable>: DataDecodable {
-    var valueType: Any.Type { Value.self }
-    var value: Value
-    
-    public init(data: Data) throws {
-        value = try JSONDecoder().decode(Value.self, from: data)
-    }    
-}
-
-//extension Decodable: DataDecodable {
-//    
-//}
-//extension Resource {
-//    init(wrappedValue url: URL?) {
-//        fatalError()
-////        self._wrappedValue = .blankValue
-//    }
-//}
-
-//import Combine
-
 extension Resource {
     
-    final class Tracker<TValue: DataDecodable>: ObservableObject, @unchecked Sendable {
-        var resource: ResourceBox<TValue>?
+    final class Tracker<BoxValue: DataDecodable>: ObservableObject, @unchecked Sendable {
+        var resource: ResourceBox<BoxValue>?
 
-        var qualifier: Qualifier? {
+        var qualifier: CacheKey<BoxValue>? {
             get { _qualifier }
             set {
                 guard newValue != _qualifier
@@ -109,22 +98,23 @@ extension Resource {
             }
         }
         
-        var _qualifier: Qualifier?
+        var _qualifier: CacheKey<BoxValue>?
 
-        public var value: TValue? {
+        public var value: BoxValue? {
             if let _cache { return _cache }
             load()
             return _cache
          }
-        private var _cache: TValue?
+        private var _cache: BoxValue?
         
-        init(qualifier: Qualifier? = nil) {
-            if let qualifier, let url = URL(string: qualifier) {
-                resource = try? ResourceCache.shared.resource(TValue.self, remote: url)
+        init(cacheKey: CacheKey<BoxValue>? = nil) {
+            if let cacheKey {
+                self.qualifier = cacheKey
+                resource = try? ResourceCache.shared.resource(BoxValue.self, remote: cacheKey.url)
             }
         }
                 
-        func resetCache(to value: TValue) {
+        func resetCache(to value: BoxValue) {
             Task { @MainActor in
                 objectWillChange.send()
                 _cache = value
@@ -132,9 +122,8 @@ extension Resource {
         }
         
         func reload() {
-            if let qualifier, qualifier != resource?.remoteURL.absoluteString,
-               let url = URL(string: qualifier) {
-                resource = try? ResourceCache.shared.resource(TValue.self, remote: url)
+            if let qualifier {
+                resource = try? ResourceCache.shared.resource(key: qualifier)
             }
             load()
         }

@@ -13,7 +13,7 @@ import Foundation
 //   let catalog = try? JSONDecoder().decode(RecipeBox.self, from: jsonData)
 
 // MARK: - RecipeBox
-struct RecipeBox: Decodable {
+struct RecipeBox: Decodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case recipes
     }
@@ -42,7 +42,7 @@ struct RecipeBox: Decodable {
 }
 
 // MARK: - Recipe
-struct Recipe: Codable, Identifiable, Sendable {
+struct Recipe: Codable, Identifiable, Equatable, Sendable {
     var id: UUID { uuid }
     let cuisine, name: String
     let photoURLLarge, photoURLSmall: URL?
