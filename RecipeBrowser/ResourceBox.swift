@@ -21,8 +21,8 @@ final public class ResourceBox<Value>: Observable, AnyResourceBox, @unchecked Se
     private let lock = NSRecursiveLock()
     private var value: Value?
 
-    private let remoteURL: URL
-    private let fileURL: URL
+    public let remoteURL: URL
+    public let fileURL: URL
     private let decode: @Sendable (Data) throws -> Value
 
     public init?(remote: String, cache: String,

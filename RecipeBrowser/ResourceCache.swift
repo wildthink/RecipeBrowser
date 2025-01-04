@@ -73,3 +73,9 @@ extension ResourceCache {
         try resource(remote: remote, key: key, decode: Image.init)
     }
 }
+
+extension String {
+    func DJB2hashValue(seed: Int) -> Int {
+        return unicodeScalars.reduce(seed) { ($0 &* 33) &+ Int($1.value) }
+    }
+}
