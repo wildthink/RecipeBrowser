@@ -8,11 +8,6 @@
 import SwiftUI
 import Foundation
 
-extension RecipeBox: DataDecodable {
-    public init(data: Data) throws {
-        self = try JSONDecoder().decode(Self.self, from: data)
-    }
-}
 
 struct ContentView: View {
     @Resource var recipeBox: RecipeBox = .init()
@@ -132,35 +127,6 @@ extension CacheKey<RecipeBox> {
     
     static let malformedRecipes: CacheKey<RecipeBox> = .init(
             url: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-malformed.json")!)
-}
-
-extension ResourceBox<RecipeBox> {
-    static var allCases: [ResourceBox<RecipeBox>] = [
-        .allRecipes, .emptyRecipes, .malformedRecipes
-    ]
-    
-    static let allRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
-        .resource(
-            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes.json")!,
-            key: "recipes.json")
-    
-    static let emptyRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
-        .resource(
-            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-empty.json")!,
-            key: "recipes-empty.json")
-
-    static let malformedRecipes: ResourceBox<RecipeBox> = try! ResourceCache.shared
-        .resource(
-            remote: URL(string: "https://d3jbb8n5wk0qxi.cloudfront.net/recipes-malformed.json")!,
-            key: "recipes-malformed.json")
-
-}
-
-extension ResourceBox<Image> {
-    static func imageResource(for url: URL) throws -> ResourceBox<Image> {
-        let key = url.path.replacingOccurrences(of: "/", with: "_")
-        return try ResourceCache.shared.resource(remote: url, key: key)
-    }
 }
 
 #if os(macOS)

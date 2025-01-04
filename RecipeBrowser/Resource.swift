@@ -8,13 +8,10 @@
 import Foundation
 import SwiftUI
 
-public protocol DataDecodable {
-    @Sendable init(data: Data) throws
-}
 
 @MainActor
 @propertyWrapper
-struct Resource<Value: DataDecodable>: @preconcurrency DynamicProperty
+struct Resource<Value>: @preconcurrency DynamicProperty
 {
     typealias Qualifier = CacheKey<Value>
     @StateObject private var tracker: Tracker<Value> = .init()
@@ -42,50 +39,10 @@ struct Resource<Value: DataDecodable>: @preconcurrency DynamicProperty
     }
 }
 
-// MARK: Cache Extension
-
-extension ResourceCache {
-    
-//    func resource<Value, Key: CacheKey>(
-//        _ key: Key
-//    ) where Key.Type == Value throws -> ResourceBox<Value> {
-//        let key = key.url.absoluteString.DJB2hashValue().description
-//        return try resource(remote: remote, key: key, decode: D.init)
-//    }
-
-    
-    func resource<D: DataDecodable>(
-        _ type: D.Type = D.self,
-        remote: URL
-    ) throws -> ResourceBox<D> {
-        let key = remote.absoluteString.DJB2hashValue().description
-        return try resource(remote: remote, key: key, decode: D.init)
-    }
-}
-
-extension Image: DataDecodable {}
-extension Optional: DataDecodable where Wrapped: DataDecodable {
-    public init(data: Data) throws {
-        self = try Wrapped(data: data)
-    }
-}
-
-extension Image: @retroactive Decodable {
-    public init(from decoder: Decoder) throws {
-        // Provide a meaningful implementation or throw an error if decoding is unsupported
-        throw DecodingError.typeMismatch(
-            Image.self,
-            DecodingError.Context(
-                codingPath: decoder.codingPath,
-                debugDescription: "Image cannot be directly decoded."
-            )
-        )
-    }
-}
 
 extension Resource {
     
-    final class Tracker<BoxValue: DataDecodable>: ObservableObject, @unchecked Sendable {
+    final class Tracker<BoxValue>: ObservableObject, @unchecked Sendable {
         var resource: ResourceBox<BoxValue>?
 
         var qualifier: CacheKey<BoxValue>? {
@@ -110,7 +67,7 @@ extension Resource {
         init(cacheKey: CacheKey<BoxValue>? = nil) {
             if let cacheKey {
                 self.qualifier = cacheKey
-                resource = try? ResourceCache.shared.resource(BoxValue.self, remote: cacheKey.url)
+                resource = try? ResourceCache.shared.resource(key: cacheKey)
             }
         }
                 
