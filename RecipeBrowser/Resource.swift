@@ -19,13 +19,13 @@ struct Resource<Value>: @preconcurrency DynamicProperty
         get { tracker.qualifier }
         nonmutating set { tracker.qualifier = newValue }
     }
-
+    
     public var wrappedValue: Value {
         tracker.value ?? _wrappedValue
     }
     
     var _wrappedValue: Value
-
+    
     init(wrappedValue: Value) {
         self._wrappedValue = wrappedValue
     }
@@ -43,9 +43,9 @@ struct Resource<Value>: @preconcurrency DynamicProperty
 extension Resource {
     
     final class Tracker<BoxValue>: ObservableObject, @unchecked Sendable {
-        var resource: ResourceBox<BoxValue>?
-
-        var qualifier: CacheKey<BoxValue>? {
+        var resource: DataLoader?
+        
+        public var qualifier: CacheKey<BoxValue>? {
             get { _qualifier }
             set {
                 guard newValue != _qualifier
@@ -56,12 +56,12 @@ extension Resource {
         }
         
         var _qualifier: CacheKey<BoxValue>?
-
+        
         public var value: BoxValue? {
             if let _cache { return _cache }
             load()
             return _cache
-         }
+        }
         private var _cache: BoxValue?
         
         init(cacheKey: CacheKey<BoxValue>? = nil) {
@@ -73,17 +73,19 @@ extension Resource {
         }
         
         func report(error: Error) {
-            print("Error loading resource: \(error.localizedDescription)")
+            let url = qualifier?.url.description ?? "<url>"
+            print("Error loading \(url)\n\t: \(error.localizedDescription)")
         }
         
-        func resetCache(to value: BoxValue) {
+        func resetCache(with data: Data) {
             Task { @MainActor in
+                let val = try qualifier?.decoder(data)
                 objectWillChange.send()
-                _cache = value
+                _cache = val
             }
         }
         
-        func reload() {
+        public func reload() {
             if let qualifier {
                 do {
                     resource = try ResourceCache.shared.resource(key: qualifier)
@@ -94,16 +96,12 @@ extension Resource {
             load()
         }
         
-        func load() {
+        public func load() {
             guard let resource else { return }
-            if let val = resource.load(refresh: false) {
-                resetCache(to: val)
-            }
             Task {
                 do {
-                    if let val = try await resource.awaitValue() {
-                        resetCache(to: val)
-                    }
+                    let data = try await resource.fetch()
+                    resetCache(with: data)
                 } catch {
                     report(error: error)
                 }

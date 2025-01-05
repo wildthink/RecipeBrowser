@@ -8,21 +8,21 @@
 import Foundation
 import SwiftUI
 
-final class ResourceCache {
-    static let shared = ResourceCache()
+public final class ResourceCache {
+    public static let shared = ResourceCache()
     
     private let lock = NSRecursiveLock()
-    private var resources: [String: any AnyResourceBox]
+    private var resources: [URL: DataLoader]
     let cacheDirectory: URL
     
-    init(cacheDirectory: String = NSTemporaryDirectory()) {
+    public init(cacheDirectory: String = NSTemporaryDirectory()) {
         self.cacheDirectory = URL(filePath: cacheDirectory)
             .appending(component: "cache")
         
         resources = [:]
     }
     
-    func clearCache() {
+    public func clearCache() {
         // TODO: Provide robust cache eviction logic
         lock.withLock {
             try? FileManager.default.removeItem(at: cacheDirectory)
@@ -34,27 +34,14 @@ final class ResourceCache {
         return cacheDirectory.appendingPathComponent(key)
     }
     
-    /// All specializing resource lookup / creation MUST ultimately pass through this method
-    func resource<A>(
-        remote: URL,
-        key: String,
-        decode: @escaping @Sendable (Data) throws -> A
-    ) throws -> ResourceBox<A> {
-        try lock.withLock {
-            if let anybox = resources[key] {
-                guard let goodbox = anybox as? ResourceBox<A>
-                else {
-                    throw AnyError("Resource key \(key) has mismatching types," +
-                                   "\(anybox.valueType) != \(A.self)")
-                }
+    func resource<R>(key: CacheKey<R>) throws -> DataLoader {
+        lock.withLock {
+            if let goodbox = resources[key.url] {
                 return goodbox
             }
             // Otherwise we create a new ResourceBox to be shared
-            let box = ResourceBox(
-                remote: remote,
-                cache: resourceCacheURL(key: key),
-                decode: decode)
-            resources[key] = box
+            let box = DataLoader(url: key.url, cache: resourceCacheURL(key: key.localKey))
+            resources[key.url] = box
             return box
         }
     }
@@ -90,31 +77,6 @@ public extension CacheKey {
             try JSONDecoder().decode(Value.self, from: $0)
         }
     }
-    
-    init(for: Value.Type = Value.self, url: URL)
-    where Value == Image {
-        self.url = url
-        self.decoder = { Image(data: $0) }
-    }
-
-}
-
-// MARK: Convenience ResourceBoxes
-
-extension ResourceCache {
-    
-    func resource<R>(key: CacheKey<R>) throws -> ResourceBox<R> {
-        try resource(
-            remote: key.url,
-            key: key.localKey,
-            decode: key.decoder)
-    }
-
-//    func resource<R: Decodable>(remote: URL, key: String) throws -> ResourceBox<R> {
-//        try resource(remote: remote, key: key, decode: {
-//            try JSONDecoder().decode(R.self, from: $0)
-//        })
-//    }
 }
 
 extension CustomStringConvertible {
