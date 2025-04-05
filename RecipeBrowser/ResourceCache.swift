@@ -8,11 +8,11 @@
 import Foundation
 import SwiftUI
 
-public final class ResourceCache {
+public final class ResourceCache: Sendable {
     public static let shared = ResourceCache()
     
     private let lock = NSRecursiveLock()
-    private var resources: [URL: Any]
+    nonisolated(unsafe) private var resources: [URL: Any]
     let cacheDirectory: URL
     
     public init(cacheDirectory: String = NSTemporaryDirectory()) {
@@ -52,7 +52,7 @@ public final class ResourceCache {
     }
 }
 
-public struct CacheKey<Value>: Hashable {
+public struct CacheKey<Value>: Hashable, Sendable {
     public let url: URL
     public var valueType: Any.Type { Value.self }
     let decoder: @Sendable (Data) throws -> Value

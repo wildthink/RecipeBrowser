@@ -9,11 +9,11 @@ import Foundation
 import SwiftUI
 
 
-@MainActor
 @propertyWrapper
-struct Resource<Value>: DynamicProperty
+struct Resource<Value: Sendable>: DynamicProperty
 {
     typealias Qualifier = CacheKey<Value>
+    @Environment(\.resourceCache) var cache
     @StateObject private var tracker: Tracker<Value> = .init()
     
     public var wrappedValue: Value {
@@ -25,17 +25,30 @@ struct Resource<Value>: DynamicProperty
     init(wrappedValue: Value) {
         self._wrappedValue = wrappedValue
     }
-        
+    
+    func update() {
+        tracker.refresh(cache: cache)
+    }
     public var projectedValue: Tracker<Value> {
         tracker
     }
 }
 
+extension EnvironmentValues {
+    @Entry var resourceCache: ResourceCache = .shared
+}
+
+public extension View {
+    func resourceCache(_ cache: ResourceCache) -> some View {
+        environment(\.resourceCache, cache)
+    }
+}
 
 extension Resource {
     
     @MainActor
-    final class Tracker<BoxValue>: ObservableObject, @unchecked Sendable {
+    final class Tracker<BoxValue: Sendable>: ObservableObject, Sendable {
+        var cache: ResourceCache?
         var resource: DataLoader<BoxValue>?
         public var value: BoxValue?
         
@@ -45,12 +58,15 @@ extension Resource {
             }
         }
         
+        func refresh(cache: ResourceCache) {
+            self.cache = cache
+        }
         
         init(cacheKey: CacheKey<BoxValue>? = nil) {
             if let cacheKey {
                 self.qualifier = cacheKey
                 // TODO: report exceptions
-                resource = try? ResourceCache.shared.resource(key: cacheKey)
+                resource = try? cache?.resource(key: cacheKey)
             }
         }
         
@@ -67,7 +83,7 @@ extension Resource {
         public func reload() {
             if let qualifier {
                 do {
-                    resource = try ResourceCache.shared.resource(key: qualifier)
+                    resource = try cache?.resource(key: qualifier)
                 } catch {
                     report(error: error)
                 }

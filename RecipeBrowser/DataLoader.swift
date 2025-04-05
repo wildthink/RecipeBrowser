@@ -7,14 +7,6 @@
 import SwiftUI
 import Foundation
 
-extension NSLock {
-    func withLock<T>(_ apply: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try apply()
-    }
-}
-
 public actor DataLoader<Model> {
     public typealias Transformer = (Data) throws -> Model
 //    nonisolated let valuePublisher = CurrentValueSubject<Int, Never>(0)
