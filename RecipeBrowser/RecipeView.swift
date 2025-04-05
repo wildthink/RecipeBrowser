@@ -32,16 +32,7 @@ struct RecipeView: View {
     }
     
     var body: some View {
-        Group {
-            switch presentationStyle {
-            case _ where image == nil:
-                ProgressView("Loading")
-            case .fullpage:
-                fullpage
-            case .row:
-                rowView
-            }
-        }
+        main
         .frame(maxWidth: .infinity)
         .overlay(alignment: .bottomTrailing) {
             links
@@ -51,6 +42,18 @@ struct RecipeView: View {
         }
         .onAppear {
             refreshImage()
+        }
+    }
+    
+    @ViewBuilder
+    var main: some View {
+        switch presentationStyle {
+            case _ where image == nil:
+                ProgressView("Loading")
+            case .fullpage:
+                fullpage
+            case .row:
+                rowView
         }
     }
     

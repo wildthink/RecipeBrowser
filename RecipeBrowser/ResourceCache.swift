@@ -12,7 +12,7 @@ public final class ResourceCache {
     public static let shared = ResourceCache()
     
     private let lock = NSRecursiveLock()
-    private var resources: [URL: DataLoader]
+    private var resources: [URL: Any]
     let cacheDirectory: URL
     
     public init(cacheDirectory: String = NSTemporaryDirectory()) {
@@ -25,6 +25,7 @@ public final class ResourceCache {
     public func clearCache() {
         // TODO: Provide robust cache eviction logic
         lock.withLock {
+            resources = [:]
             try? FileManager.default.removeItem(at: cacheDirectory)
         }
     }
@@ -34,13 +35,17 @@ public final class ResourceCache {
         return cacheDirectory.appendingPathComponent(key)
     }
     
-    func resource<R>(key: CacheKey<R>) throws -> DataLoader {
+    func resource<R>(key: CacheKey<R>) throws -> DataLoader<R> {
         lock.withLock {
-            if let goodbox = resources[key.url] {
+            if let goodbox = resources[key.url] as? DataLoader<R> {
                 return goodbox
             }
             // Otherwise we create a new ResourceBox to be shared
-            let box = DataLoader(url: key.url, cache: resourceCacheURL(key: key.localKey))
+            let box = DataLoader<R>(
+                url: key.url,
+                cache: resourceCacheURL(key: key.localKey),
+                transform: key.decoder)
+
             resources[key.url] = box
             return box
         }

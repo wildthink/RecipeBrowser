@@ -7,35 +7,62 @@
 import SwiftUI
 import Foundation
 
-public actor DataLoader {
-    private var status: LoaderStatus
+extension NSLock {
+    func withLock<T>(_ apply: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try apply()
+    }
+}
+
+public actor DataLoader<Model> {
+    public typealias Transformer = (Data) throws -> Model
+//    nonisolated let valuePublisher = CurrentValueSubject<Int, Never>(0)
+
+    nonisolated(unsafe) private var status: LoaderStatus
+    private let lock = NSLock()
+    nonisolated public func check() -> LoaderStatus {
+        lock.withLock {
+            self.status
+        }
+    }
+        
+    private let transformer: Transformer
     public let localCacheFile: URL
     
-    public init(url: URL, cache: URL) {
+    public init(url: URL, cache: URL, transform: @escaping Transformer) {
         self.status = .ready(URLRequest(url: url))
         self.localCacheFile = cache
+        self.transformer = transform
     }
     
-    public init(request: URLRequest, cache: URL) {
+    public init(request: URLRequest, cache: URL, transform: @escaping Transformer) {
         self.status = .ready(request)
         self.localCacheFile = cache
+        self.transformer = transform
     }
     
-    public func fetch() async throws -> Data {
+    public func fetch() async throws -> Model {
         var urlRequest: URLRequest
         
         switch status {
-        case .ready(let req):
-            urlRequest = req
-        case .fetched(let data):
-            return data
-        case .inProgress(let task):
-            return try await task.value
+            case .ready(let req):
+                urlRequest = req
+            case .loaded(_, let model):
+                return model
+            case .inProgress(let task):
+                let data = try await task.value
+                let m = try transformer(data)
+                self.status = .loaded(data, m)
+                return m
+            case .failed(let e):
+                throw e
         }
         
         if let data = try self.dataFromFileSystem(for: urlRequest) {
-            status = .fetched(data)
-            return data
+            let model = try transformer(data)
+            status = .loaded(data, model)
+            return model
         }
         
         let task: Task<Data, Error> = Task {
@@ -46,8 +73,9 @@ public actor DataLoader {
         
         status = .inProgress(task)
         let data = try await task.value
-        status = .fetched(data)
-        return data
+        let model = try transformer(data)
+        status = .loaded(data, model)
+        return model
     }
     
     
@@ -60,10 +88,11 @@ public actor DataLoader {
         try data.write(to: localCacheFile)
     }
     
-    private enum LoaderStatus {
+    public enum LoaderStatus {
         case ready(URLRequest)
         case inProgress(Task<Data, Error>)
-        case fetched(Data)
+        case loaded(Data, Model)
+        case failed(Error)
     }
     
     private func dataFromFileSystem(for urlRequest: URLRequest) throws -> Data? {

@@ -4,21 +4,17 @@
 //
 //  Created by Jason Jobe on 1/2/25.
 //
-
+// https://www.alihilal.com/blog/zero-copy-swift-mastering-accessor-coroutines.mdx/
 import Foundation
 import SwiftUI
 
 
 @MainActor
 @propertyWrapper
-struct Resource<Value>: @preconcurrency DynamicProperty
+struct Resource<Value>: DynamicProperty
 {
     typealias Qualifier = CacheKey<Value>
     @StateObject private var tracker: Tracker<Value> = .init()
-    var qualifier: Qualifier? {
-        get { tracker.qualifier }
-        nonmutating set { tracker.qualifier = newValue }
-    }
     
     public var wrappedValue: Value {
         tracker.value ?? _wrappedValue
@@ -29,11 +25,7 @@ struct Resource<Value>: @preconcurrency DynamicProperty
     init(wrappedValue: Value) {
         self._wrappedValue = wrappedValue
     }
-    
-    mutating func update() {
-        tracker.qualifier = self.qualifier
-    }
-    
+        
     public var projectedValue: Tracker<Value> {
         tracker
     }
@@ -42,27 +34,17 @@ struct Resource<Value>: @preconcurrency DynamicProperty
 
 extension Resource {
     
+    @MainActor
     final class Tracker<BoxValue>: ObservableObject, @unchecked Sendable {
-        var resource: DataLoader?
+        var resource: DataLoader<BoxValue>?
+        public var value: BoxValue?
         
         public var qualifier: CacheKey<BoxValue>? {
-            get { _qualifier }
-            set {
-                guard newValue != _qualifier
-                else { return }
-                _qualifier = newValue
+            didSet {
                 reload()
             }
         }
         
-        var _qualifier: CacheKey<BoxValue>?
-        
-        public var value: BoxValue? {
-            if let _cache { return _cache }
-            load()
-            return _cache
-        }
-        private var _cache: BoxValue?
         
         init(cacheKey: CacheKey<BoxValue>? = nil) {
             if let cacheKey {
@@ -76,15 +58,12 @@ extension Resource {
             let url = qualifier?.url.description ?? "<url>"
             print("Error loading \(url)\n\t: \(error.localizedDescription)")
         }
-        
-        func resetCache(with data: Data) {
-            Task { @MainActor in
-                let val = try qualifier?.decoder(data)
-                objectWillChange.send()
-                _cache = val
-            }
+    
+        func resetCache(with value: BoxValue) {
+            objectWillChange.send()
+            self.value = value
         }
-        
+
         public func reload() {
             if let qualifier {
                 do {
@@ -98,6 +77,11 @@ extension Resource {
         
         public func load() {
             guard let resource else { return }
+            if case let .loaded(_, mod) = resource.check() {
+                resetCache(with: mod)
+                return
+            }
+
             Task {
                 do {
                     let data = try await resource.fetch()
